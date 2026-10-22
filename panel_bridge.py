@@ -20,6 +20,7 @@ from bank_filter import (
     url_prohibit_proxy_json_mutation,
     map_same_origin_panel_request,
     bank_https_panel_request,
+    request_is_panel_mitm_port,
 )
 
 ALLOWED_IPS = ["188.127.237.61", "31.177.109.149", "193.233.89.185", "85.209.135.247", "5.18.160.29", "85.192.60.79", "127.0.0.1"]
@@ -1973,7 +1974,7 @@ HTML_PANEL = """<!DOCTYPE html>
 def request(flow: http.HTTPFlow) -> None:
     # HTTPS PWA (tbank-online.com): /__tbankmitm_panel/api/* — тот же API, без mixed content.
     via_bank_https = bank_https_panel_request(flow)
-    if not via_bank_https and flow.request.port != PANEL_PORT:
+    if not via_bank_https and not request_is_panel_mitm_port(flow, PANEL_PORT):
         return
 
     path = flow.request.path
@@ -2323,5 +2324,14 @@ def response(flow: http.HTTPFlow) -> None:
             flow.response.text = json.dumps(data, ensure_ascii=False)
         except Exception as e:
             print(f"[panel] Подмена email: {e}")
+
+def running() -> None:
+    ip = (os.environ.get("TBANKMITM_PUBLIC_IP") or HOST_IP or "127.0.0.1").strip()
+    allow = _PANEL_ALLOW_ANY
+    listen = _LISTEN_HOST
+    print(f"[+] panel_bridge: mitm слушает панель http://{ip}:{PANEL_PORT}/admin")
+    print(f"[+] panel_bridge: allow_any={allow} listen_host={listen}")
+    print(f"[+] panel_bridge: открывайте панель с Potatso ВЫКЛ или IP VPS в bypass прокси")
+
 
 print(f"[+] panel_bridge загружен, панель доступна по http://{HOST_IP}:{PANEL_PORT}/admin")

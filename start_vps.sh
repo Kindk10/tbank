@@ -47,4 +47,5 @@ if [[ -z "${TBANK_PANEL_FETCH_ORIGIN:-}" ]]; then
   export TBANK_PANEL_FETCH_ORIGIN="http://${TBANKMITM_PUBLIC_IP}:${TBANKMITM_PROXY_PORT}"
 fi
 
+echo "[start_vps] Панель: http://${TBANKMITM_PUBLIC_IP}:${TBANKMITM_PROXY_PORT}/admin (Potatso OFF или bypass IP на телефоне)"
 exec ./venv/bin/python mitm_run_dump.py

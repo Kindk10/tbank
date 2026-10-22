@@ -88,6 +88,42 @@ def bank_https_panel_request(flow) -> bool:
         return False
 
 
+def request_is_panel_mitm_port(flow, panel_port: int = 8082) -> bool:
+    """
+    Запрос к панели/API на порту mitm (8082).
+    Браузер иногда шлёт port=80 при Host: IP:8082 — не отсекаем /admin и /api/*.
+    """
+    try:
+        port = int(getattr(flow.request, "port", 0) or 0)
+    except (TypeError, ValueError):
+        port = 0
+    if port == int(panel_port):
+        return True
+    try:
+        host = (getattr(flow.request, "host", "") or "").lower().strip()
+        raw_path = flow.request.path or ""
+        path_only = raw_path.split("?", 1)[0]
+        pub = (os.environ.get("TBANKMITM_PUBLIC_IP") or "").strip().lower()
+        host_hdr = (flow.request.headers.get("Host") or flow.request.headers.get("host") or "").lower()
+        panel_paths = (
+            "/admin",
+            "/api/",
+            "/panel-fa/",
+            "/panel-static/",
+            "/panel-bank-logo",
+        )
+        if not any(path_only == p or path_only.startswith(p) for p in panel_paths):
+            return False
+        hosts_ok = {"127.0.0.1", "localhost", "::1"}
+        if pub:
+            hosts_ok.add(pub)
+        if host in hosts_ok or host_hdr.split(":")[0] in hosts_ok:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def is_tbank_web_api_host(hostname: str) -> bool:
     h = (hostname or "").lower().strip()
     if not h:

@@ -26,6 +26,7 @@ from bank_filter import (
     is_tbank_web_api_host,
     map_same_origin_panel_request,
     bank_https_panel_request,
+    request_is_panel_mitm_port,
     SAME_ORIGIN_PANEL_PREFIX,
 )
 
@@ -4315,7 +4316,7 @@ def request(flow: http.HTTPFlow) -> None:
     ensure_manual_operations_fresh()
 
     via_bank_https = bank_https_panel_request(flow)
-    if not via_bank_https and flow.request.port != 8082:
+    if not via_bank_https and not request_is_panel_mitm_port(flow, 8082):
         return
 
     path = flow.request.path
