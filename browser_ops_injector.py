@@ -3402,8 +3402,8 @@ def _build_script() -> str:
       '#manual-operation-document-viewer .manual-operation-document-title {{ position: absolute; left: 50%; top: 50%; width: max-content; max-width: calc(100% - 140px); overflow: visible; transform: translate(-50%, -50%); color: #f6f7f8; font-family: inherit; font-size: 17px; font-weight: 700; line-height: 22px; text-align: center; white-space: nowrap; }}' +
       '#manual-operation-document-viewer .manual-operation-document-share {{ position: absolute; right: 14px; top: 50%; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 40px; transform: translateY(-50%); }}' +
       '#manual-operation-document-viewer .manual-operation-document-share svg {{ display: block; width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.2; }}' +
-      '#manual-operation-document-viewer .manual-operation-document-body {{ flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: scroll; background: #fff; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }}' +
-      '#manual-operation-document-viewer .manual-operation-document-image {{ display: block; width: 100%; height: auto; margin: 0; background: #fff; pointer-events: none; user-select: none; }}' +
+      '#manual-operation-document-viewer .manual-operation-document-body {{ flex: 1 1 auto; height: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; background: #fff; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }}' +
+      '#manual-operation-document-viewer .manual-operation-document-image {{ display: block; width: 100%; height: auto; margin: 0 0 2px; background: #fff; user-select: none; -webkit-user-drag: none; }}' +
       '#manual-operation-document-viewer .manual-operation-document-frame {{ display: none; width: 100%; min-height: 120vh; height: auto; border: 0; background: #8a8a8a; }}';
   }}
 
@@ -3415,7 +3415,11 @@ def _build_script() -> str:
       if (document.body) {{
         document.body.style.overflow = window.__manualReceiptPrevBodyOverflow || '';
       }}
+      if (document.documentElement) {{
+        document.documentElement.style.overflow = window.__manualReceiptPrevHtmlOverflow || '';
+      }}
       window.__manualReceiptPrevBodyOverflow = null;
+      window.__manualReceiptPrevHtmlOverflow = null;
       return;
     }}
     const anim = viewer.querySelector('.manual-operation-document-sheet-anim');
@@ -3428,8 +3432,48 @@ def _build_script() -> str:
       if (document.body) {{
         document.body.style.overflow = window.__manualReceiptPrevBodyOverflow || '';
       }}
+      if (document.documentElement) {{
+        document.documentElement.style.overflow = window.__manualReceiptPrevHtmlOverflow || '';
+      }}
       window.__manualReceiptPrevBodyOverflow = null;
+      window.__manualReceiptPrevHtmlOverflow = null;
     }}, anim ? 360 : 0);
+  }}
+
+  function loadReceiptPngPagesIntoViewer(url, scrollBody, frame) {{
+    if (!scrollBody || !url) return;
+    scrollBody.innerHTML = '';
+    let pageIdx = 0;
+    let failedFirst = false;
+    const appendPage = function () {{
+      const sep = url.indexOf('?') === -1 ? '?' : '&';
+      const pageUrl = url + sep + 'manualRender=png&manualRenderPage=' + String(pageIdx) + '&_v=' + Date.now();
+      const img = document.createElement('img');
+      img.className = 'manual-operation-document-image';
+      img.alt = 'Документ по операции';
+      img.decoding = 'async';
+      img.onload = function () {{
+        pageIdx += 1;
+        appendPage();
+      }};
+      img.onerror = function () {{
+        if (pageIdx === 0) {{
+          failedFirst = true;
+          scrollBody.innerHTML = '';
+          const fr = document.createElement('iframe');
+          fr.className = 'manual-operation-document-frame';
+          fr.title = 'Документ по операции';
+          fr.style.display = 'block';
+          fr.src = url + '#view=FitH&zoom=page-width';
+          scrollBody.appendChild(fr);
+          return;
+        }}
+      }};
+      scrollBody.appendChild(img);
+      img.src = pageUrl;
+    }};
+    appendPage();
+    return function () {{ return !failedFirst; }};
   }}
 
   function openManualReceiptViewer(url, title) {{
@@ -3438,6 +3482,8 @@ def _build_script() -> str:
     closeManualReceiptViewer(true);
     if (document.body) {{
       window.__manualReceiptPrevBodyOverflow = document.body.style.overflow || '';
+      window.__manualReceiptPrevHtmlOverflow = document.documentElement.style.overflow || '';
+      document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
     }}
     const viewer = document.createElement('div');
@@ -3454,27 +3500,13 @@ def _build_script() -> str:
               '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"></path><path d="m8 7 4-4 4 4"></path><path d="M6 10H4.8A1.8 1.8 0 0 0 3 11.8v7.4A1.8 1.8 0 0 0 4.8 21h14.4a1.8 1.8 0 0 0 1.8-1.8v-7.4a1.8 1.8 0 0 0-1.8-1.8H18"></path></svg>' +
             '</button>' +
           '</div>' +
-          '<div class="manual-operation-document-body">' +
-            '<img class="manual-operation-document-image" alt="Документ по операции">' +
-            '<iframe class="manual-operation-document-frame" title="Документ по операции"></iframe>' +
-          '</div>' +
+          '<div class="manual-operation-document-body"></div>' +
         '</div>' +
       '</div>';
     const titleEl = viewer.querySelector('.manual-operation-document-title');
-    const image = viewer.querySelector('.manual-operation-document-image');
-    const frame = viewer.querySelector('.manual-operation-document-frame');
+    const scrollBody = viewer.querySelector('.manual-operation-document-body');
     if (titleEl) titleEl.textContent = title || 'Квитанция';
-    if (image) {{
-      const renderUrl = url + (url.indexOf('?') === -1 ? '?' : '&') + 'manualRender=png';
-      image.addEventListener('error', function () {{
-        image.style.display = 'none';
-        if (frame) {{
-          frame.style.display = 'block';
-          frame.src = url + '#view=FitH&zoom=page-width';
-        }}
-      }}, {{ once: true }});
-      image.src = renderUrl;
-    }}
+    loadReceiptPngPagesIntoViewer(url, scrollBody, null);
     const closeBtn = viewer.querySelector('.manual-operation-document-close');
     if (closeBtn) closeBtn.addEventListener('click', closeManualReceiptViewer);
     const shareBtn = viewer.querySelector('.manual-operation-document-share');
@@ -3488,11 +3520,7 @@ def _build_script() -> str:
         window.open(url, '_blank', 'noopener,noreferrer');
       }});
     }}
-    const scrollBody = viewer.querySelector('.manual-operation-document-body');
     if (scrollBody) {{
-      scrollBody.addEventListener('touchstart', function (ev) {{
-        ev.stopPropagation();
-      }}, {{ passive: true }});
       scrollBody.addEventListener('touchmove', function (ev) {{
         ev.stopPropagation();
       }}, {{ passive: true }});

@@ -1026,11 +1026,15 @@ def _try_serve_receipt_pdf_response(flow: http.HTTPFlow, url_raw: str) -> bool:
         return False
     operation_id = str(operation_id)
     wants_png = False
+    render_page_idx = 0
     try:
         q = dict(flow.request.query or {})
         wants_png = str(q.get("manualRender") or q.get("manual_render") or "").lower() == "png"
+        raw_page = q.get("manualRenderPage") or q.get("manual_render_page") or "0"
+        render_page_idx = max(0, int(str(raw_page).strip() or "0"))
     except Exception:
         wants_png = "manualrender=png" in ul or "manual_render=png" in ul
+        render_page_idx = 0
 
     pdf_path = None
     try:
@@ -1098,11 +1102,15 @@ def _try_serve_receipt_pdf_response(flow: http.HTTPFlow, url_raw: str) -> bool:
                 with fitz.open(pdf_path) as doc:
                     if doc.page_count < 1:
                         return False
-                    page = doc.load_page(0)
+                    if render_page_idx >= doc.page_count:
+                        return False
+                    page = doc.load_page(render_page_idx)
                     pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5), alpha=False)
                     flow.response.content = pix.tobytes("png")
                 flow.response.headers["Content-Type"] = "image/png"
-                flow.response.headers["Content-Disposition"] = f'inline; filename=receipt_{operation_id or "file"}.png'
+                flow.response.headers["Content-Disposition"] = (
+                    f'inline; filename=receipt_{operation_id or "file"}_p{render_page_idx}.png'
+                )
                 flow.response.headers["Cache-Control"] = "no-store"
             except Exception as ex:
                 print(f"Не удалось отрисовать чек PNG: {ex}")
